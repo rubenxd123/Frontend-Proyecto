@@ -74,3 +74,11 @@ export async function estados(token) {
   })
   return handle(res)
 }
+
+export async function detalleEstado(token, numero) {
+  const res = await fetch(
+    BASE + '/estados/' + encodeURIComponent(numero),
+    { headers: { Authorization: 'Bearer ' + token } }
+  )
+  return handle(res)
+}
