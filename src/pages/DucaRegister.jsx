@@ -19,7 +19,7 @@ export default function DucaRegister({ token }) {
     const seg = path.split('.')
     const draft = structuredClone(form)
     let cur = draft
-    for (let i=0;i<seg.length-1;i++) cur = cur[seg[i]]
+    for (let i = 0; i < seg.length - 1; i++) cur = cur[seg[i]]
     cur[seg.at(-1)] = value
     setForm(draft)
   }
@@ -30,7 +30,9 @@ export default function DucaRegister({ token }) {
     try {
       const res = await registrarDUCA(token, form)
       setMsg('OK: ' + JSON.stringify(res))
-    } catch (e2) { setMsg(String(e2)) }
+    } catch (e2) {
+      setMsg(String(e2))
+    }
   }
 
   return (
@@ -56,10 +58,16 @@ export default function DucaRegister({ token }) {
           <div><label className="label">Medio</label><input className="input" value={form.transporte.medio} onChange={e=>update('transporte.medio', e.target.value)} /></div>
           <div><label className="label">Placa</label><input className="input" value={form.transporte.placa} onChange={e=>update('transporte.placa', e.target.value)} /></div>
 
-          <div className="md:col-span-2"><button className="btn btn-primary">Registrar</button></div>
+          <div className="md:col-span-2">
+            <button className="btn btn-primary">Registrar</button>
+          </div>
         </form>
-        {form && <pre className="mt-4 text-xs opacity-80">{JSON.stringify(form, null, 2)}</pre>}
-        {msg && <p className="text-sm mt-2">{msg}</p>}
+
+        {msg && (
+          <p className={`mt-3 text-sm ${msg.toLowerCase().startsWith('ok') ? 'text-green-400' : 'text-red-400'}`}>
+            {msg}
+          </p>
+        )}
       </div>
     </div>
   )
