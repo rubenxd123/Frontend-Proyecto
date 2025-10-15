@@ -43,7 +43,7 @@ export default function DucaRegister({ token }) {
           <div><label className="label">Número</label><input className="input" value={form.numeroDocumento} onChange={e=>update('numeroDocumento', e.target.value)} required /></div>
           <div><label className="label">Fecha emisión</label><input className="input" type="date" value={form.fechaEmision} onChange={e=>update('fechaEmision', e.target.value)} required /></div>
           <div><label className="label">País emisor</label><input className="input" value={form.paisEmisor} onChange={e=>update('paisEmisor', e.target.value)} /></div>
-          <div><label className="label">Moneda</label><input className="input" value={form.moneda} onChange={e=>update('moneda', e.target.value)} /></div>
+         <div><label className="label">Moneda</label><select className="input" value={form.moneda} onChange={(e) => update('moneda', e.target.value)} ><option value="USD">USD</option><option value="QTZ">QTZ</option><option value="EU">EU</option></select></div>
           <div><label className="label">Valor aduana total</label><input className="input" type="number" value={form.valorAduanaTotal} onChange={e=>update('valorAduanaTotal', Number(e.target.value))} /></div>
 
           <div className="md:col-span-2"><h3 className="font-bold mt-4 mb-2">Importador</h3></div>
