@@ -79,6 +79,7 @@ export async function detalleEstado(token, numero) {
   const res = await fetch(
     BASE + '/estados/' + encodeURIComponent(numero),
     { headers: { Authorization: 'Bearer ' + token } }
-  )
-  return handle(res)
+  );
+  return handle(res);
 }
+
