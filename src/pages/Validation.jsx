@@ -1,94 +1,103 @@
+// src/pages/Validacion.jsx
 import { useEffect, useState } from 'react'
 import {
   listarValidacionPendientes,
-  detalleEstado,
   aprobarDUCA,
   rechazarDUCA,
+  detalleEstado,
 } from '../api'
 
-export default function Validacion({ token }) {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
+// Formateador de fecha legible para usuario final
+const dtf = new Intl.DateTimeFormat('es-GT', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
+const formatFecha = (v) => {
+  if (!v) return ''
+  const d = new Date(v)
+  return isNaN(d) ? String(v) : dtf.format(d)
+}
+
+export default function Validacion({ token: tokenProp }) {
+  const token = tokenProp || localStorage.getItem('token') || ''
+
+  // listado
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  // Modal state
+  // modal detalle
   const [open, setOpen] = useState(false)
   const [numero, setNumero] = useState('')
-  const [detalle, setDetalle] = useState(null) // { numero, estado, historial[], duca:{} }
-  const [intent, setIntent] = useState(null)   // 'aprobar' | 'rechazar' | null
+  const [detalle, setDetalle] = useState(null)
+  const [detalleError, setDetalleError] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [motivo, setMotivo] = useState('')
 
-  async function load() {
+  const load = async () => {
     setLoading(true)
     setError('')
     try {
-      const data = await listarValidacionPendientes(token)
-      setItems(data || [])
+      const r = await listarValidacionPendientes(token)
+      setRows(Array.isArray(r) ? r : [])
     } catch (e) {
-      setError(e.message)
+      setError(e?.message || 'No se pudo cargar la lista')
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  async function abrirDetalle(nro, tryIntent = null) {
-    setError('')
+  const verDetalle = async (num) => {
+    setNumero(num)
     setOpen(true)
-    setNumero(nro)
-    setIntent(tryIntent)
-    setMotivo('')
     setDetalle(null)
+    setDetalleError('')
     try {
-      const d = await detalleEstado(token, nro)
-      setDetalle(d)
+      const r = await detalleEstado(token, num)
+      setDetalle(r)
     } catch (e) {
-      setError(e.message)
+      setDetalleError(e?.message || 'No se pudo cargar el detalle')
     }
   }
 
-  function cerrarModal() {
+  const cerrarModal = () => {
     if (submitting) return
     setOpen(false)
     setNumero('')
     setDetalle(null)
-    setIntent(null)
-    setMotivo('')
+    setDetalleError('')
   }
 
-  async function onAprobar() {
-    if (!detalle) return
-    if (!confirm(`¿Aprobar la declaración ${numero}?`)) return
+  // Acciones desde la tabla (único lugar con aprobar/rechazar)
+  const onApprove = async (num) => {
+    if (!confirm(`¿Aprobar la declaración ${num}?`)) return
     setSubmitting(true)
     try {
-      await aprobarDUCA(token, numero)
-      alert('Declaración aprobada correctamente.')
-      cerrarModal()
-      load()
+      await aprobarDUCA(token, num)
+      await load()
+      // mensaje amable (usa tu toast si tienes)
+      alert('Declaración aprobada')
     } catch (e) {
-      alert(e.message)
+      alert(extraerMensaje(e?.message) || 'No se pudo aprobar')
     } finally {
       setSubmitting(false)
     }
   }
 
-  async function onRechazar() {
-    if (!detalle) return
-    if (!motivo.trim()) {
-      alert('Debes ingresar un motivo de rechazo.')
-      return
-    }
-    if (!confirm(`¿Rechazar la declaración ${numero}?`)) return
+  const onReject = async (num) => {
+    const motivo = prompt(`Motivo de rechazo para ${num}:`) || ''
+    if (!motivo.trim()) return
     setSubmitting(true)
     try {
-      await rechazarDUCA(token, numero, motivo.trim())
-      alert('Declaración rechazada.')
-      cerrarModal()
-      load()
+      await rechazarDUCA(token, num, motivo.trim())
+      await load()
+      alert('Declaración rechazada')
     } catch (e) {
-      alert(e.message)
+      alert(extraerMensaje(e?.message) || 'No se pudo rechazar')
     } finally {
       setSubmitting(false)
     }
@@ -98,14 +107,16 @@ export default function Validacion({ token }) {
     <div className="container py-8">
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2>Pendientes / En revisión</h2>
-          <button className="btn" onClick={load}>Actualizar</button>
+          <h2 className="text-xl font-semibold">Pendientes / En revisión</h2>
+          <button className="btn btn-outline" onClick={load} disabled={loading}>
+            {loading ? 'Actualizando…' : 'Actualizar'}
+          </button>
         </div>
 
-        {loading && <p>Cargando…</p>}
-        {error && <p className="text-red-400">Error: {error}</p>}
-        {!loading && !error && (
-          <table className="table">
+        {error && <div className="alert alert-error mb-3">{error}</div>}
+
+        <div className="overflow-auto">
+          <table className="table w-full">
             <thead>
               <tr>
                 <th>Número</th>
@@ -115,113 +126,213 @@ export default function Validacion({ token }) {
               </tr>
             </thead>
             <tbody>
-              {items.map(r => (
+              {rows.map((r) => (
                 <tr key={r.numero_documento}>
-                  <td>{r.numero_documento}</td>
+                  <td className="font-mono">{r.numero_documento}</td>
                   <td>
-                    <span className={`badge ${r.estado_documento === 'VALIDADA' ? 'success' : r.estado_documento === 'RECHAZADA' ? 'danger' : ''}`}>
+                    <span
+                      className={`badge ${
+                        r.estado_documento === 'VALIDADA'
+                          ? 'success'
+                          : r.estado_documento === 'RECHAZADA'
+                          ? 'danger'
+                          : ''
+                      }`}
+                    >
                       {r.estado_documento}
                     </span>
                   </td>
-                  <td>{r.creado_en}</td>
-                  <td className="text-right space-x-2">
-                    <button
-                      className="btn btn-outline"
-                      onClick={() => abrirDetalle(r.numero_documento, 'aprobar')}
-                    >
-                      Aprobar
-                    </button>
-                    <button
-                      className="btn btn-outline danger"
-                      onClick={() => abrirDetalle(r.numero_documento, 'rechazar')}
-                    >
-                      Rechazar
-                    </button>
-                    <button
-                      className="btn"
-                      onClick={() => abrirDetalle(r.numero_documento, null)}
-                    >
-                      Ver
-                    </button>
+                  <td>{formatFecha(r.creado_en)}</td>
+                  <td>
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => onApprove(r.numero_documento)}
+                        disabled={submitting}
+                      >
+                        Aprobar
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        onClick={() => onReject(r.numero_documento)}
+                        disabled={submitting}
+                      >
+                        Rechazar
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        onClick={() => verDetalle(r.numero_documento)}
+                      >
+                        Ver
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
-              {items.length === 0 && (
-                <tr><td colSpan="4" className="text-center">No hay pendientes.</td></tr>
+              {rows.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={4} className="text-center opacity-70 py-6">
+                    No hay declaraciones pendientes.
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
-        )}
+        </div>
       </div>
 
-      {/* MODAL */}
+      {/* Modal de Detalle (solo visualización) */}
       {open && (
         <div className="modal-backdrop">
-          <div className="modal">
+          <div className="modal max-w-5xl">
             <div className="modal-header">
-              <h3>Detalle • {numero}</h3>
-              <button className="btn btn-ghost" onClick={cerrarModal} disabled={submitting}>Cerrar</button>
+              <div className="flex items-center gap-3">
+                <h3 className="text-xl font-semibold">Detalle</h3>
+                {numero && (
+                  <span className="font-mono text-sm opacity-80">{numero}</span>
+                )}
+                {detalle?.estado && (
+                  <span
+                    className={`badge ${
+                      detalle.estado === 'VALIDADA'
+                        ? 'success'
+                        : detalle.estado === 'RECHAZADA'
+                        ? 'danger'
+                        : ''
+                    }`}
+                  >
+                    {detalle.estado}
+                  </span>
+                )}
+              </div>
+              <button
+                className="btn btn-ghost"
+                onClick={cerrarModal}
+                disabled={submitting}
+              >
+                Cerrar
+              </button>
             </div>
 
-            {!detalle && !error && <p>Cargando detalle…</p>}
-            {error && <p className="text-red-400">Error: {error}</p>}
+            {!detalle && !detalleError && <p>Cargando detalle…</p>}
+            {detalleError && (
+              <p className="text-red-400">Error: {detalleError}</p>
+            )}
 
             {detalle && (
-              <>
-                {/* Encabezado rápido */}
-                <p className="mb-3">
-                  Último estado: <b>{detalle.estado}</b>
-                </p>
-
-                {/* Declaración */}
-                <div className="grid md:grid-cols-2 gap-3">
+              <div className="space-y-6">
+                {/* Resumen */}
+                <div className="grid md:grid-cols-3 gap-3">
                   <div className="card-sub">
-                    <h4>Datos generales</h4>
+                    <div className="text-xs uppercase opacity-70">
+                      Fecha emisión
+                    </div>
+                    <div className="text-lg">
+                      {formatFecha(detalle.duca?.fecha_emision)}
+                    </div>
+                  </div>
+                  <div className="card-sub">
+                    <div className="text-xs uppercase opacity-70">Moneda</div>
+                    <div className="text-lg">{detalle.duca?.moneda}</div>
+                  </div>
+                  <div className="card-sub">
+                    <div className="text-xs uppercase opacity-70">
+                      Valor aduana
+                    </div>
+                    <div className="text-lg">
+                      {Number(detalle.duca?.valor_aduana_total ?? 0).toLocaleString(
+                        'es-GT'
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bloques principales */}
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="card-sub">
+                    <h4 className="mb-2 font-semibold">Importador</h4>
                     <dl className="dl">
-                      <div><dt>Número</dt><dd>{detalle.duca?.numero_documento}</dd></div>
-                      <div><dt>Fecha emisión</dt><dd>{detalle.duca?.fecha_emision}</dd></div>
-                      <div><dt>País emisor</dt><dd>{detalle.duca?.pais_emisor}</dd></div>
-                      <div><dt>Moneda</dt><dd>{detalle.duca?.moneda}</dd></div>
-                      <div><dt>Valor aduana</dt><dd>{detalle.duca?.valor_aduana_total}</dd></div>
+                      <div>
+                        <dt>Nombre</dt>
+                        <dd>{detalle.duca?.importador?.nombre}</dd>
+                      </div>
+                      <div>
+                        <dt>Documento</dt>
+                        <dd>{detalle.duca?.importador?.documento}</dd>
+                      </div>
+                      <div>
+                        <dt>País</dt>
+                        <dd>{detalle.duca?.importador?.pais}</dd>
+                      </div>
                     </dl>
                   </div>
 
                   <div className="card-sub">
-                    <h4>Transporte</h4>
+                    <h4 className="mb-2 font-semibold">Exportador</h4>
                     <dl className="dl">
-                      <div><dt>Medio</dt><dd>{detalle.duca?.transporte?.medio}</dd></div>
-                      <div><dt>Placa</dt><dd>{detalle.duca?.transporte?.placa}</dd></div>
-                      <div><dt>Conductor</dt><dd>{detalle.duca?.transporte?.conductor}</dd></div>
-                      <div><dt>Ruta</dt><dd>{detalle.duca?.transporte?.ruta}</dd></div>
+                      <div>
+                        <dt>Nombre</dt>
+                        <dd>{detalle.duca?.exportador?.nombre}</dd>
+                      </div>
+                      <div>
+                        <dt>Documento</dt>
+                        <dd>{detalle.duca?.exportador?.documento}</dd>
+                      </div>
+                      <div>
+                        <dt>País</dt>
+                        <dd>{detalle.duca?.exportador?.pais}</dd>
+                      </div>
                     </dl>
                   </div>
 
                   <div className="card-sub">
-                    <h4>Importador</h4>
+                    <h4 className="mb-2 font-semibold">Transporte</h4>
                     <dl className="dl">
-                      <div><dt>Nombre</dt><dd>{detalle.duca?.importador?.nombre}</dd></div>
-                      <div><dt>Documento</dt><dd>{detalle.duca?.importador?.documento}</dd></div>
-                      <div><dt>País</dt><dd>{detalle.duca?.importador?.pais}</dd></div>
+                      <div>
+                        <dt>Medio</dt>
+                        <dd>{detalle.duca?.transporte?.medio}</dd>
+                      </div>
+                      <div>
+                        <dt>Placa</dt>
+                        <dd>{detalle.duca?.transporte?.placa}</dd>
+                      </div>
+                      <div>
+                        <dt>Conductor</dt>
+                        <dd>{detalle.duca?.transporte?.conductor}</dd>
+                      </div>
+                      <div>
+                        <dt>Ruta</dt>
+                        <dd>{detalle.duca?.transporte?.ruta}</dd>
+                      </div>
                     </dl>
                   </div>
 
                   <div className="card-sub">
-                    <h4>Exportador</h4>
+                    <h4 className="mb-2 font-semibold">Datos generales</h4>
                     <dl className="dl">
-                      <div><dt>Nombre</dt><dd>{detalle.duca?.exportador?.nombre}</dd></div>
-                      <div><dt>Documento</dt><dd>{detalle.duca?.exportador?.documento}</dd></div>
-                      <div><dt>País</dt><dd>{detalle.duca?.exportador?.pais}</dd></div>
+                      <div>
+                        <dt>Número</dt>
+                        <dd>{detalle.duca?.numero_documento}</dd>
+                      </div>
+                      <div>
+                        <dt>País emisor</dt>
+                        <dd>{detalle.duca?.pais_emisor}</dd>
+                      </div>
                     </dl>
                   </div>
                 </div>
 
                 {/* Mercancías */}
-                <div className="card-sub mt-3">
-                  <h4>Mercancías</h4>
+                <div className="card-sub">
+                  <h4 className="mb-2 font-semibold">Mercancías</h4>
                   <table className="table">
                     <thead>
                       <tr>
-                        <th>#</th><th>Descripción</th><th>Cantidad</th><th>Unidad</th><th>Valor</th>
+                        <th>#</th>
+                        <th>Descripción</th>
+                        <th className="text-right">Cantidad</th>
+                        <th>Unidad</th>
+                        <th className="text-right">Valor</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -229,80 +340,76 @@ export default function Validacion({ token }) {
                         <tr key={i}>
                           <td>{m.itemNo}</td>
                           <td>{m.descripcion}</td>
-                          <td>{m.cantidad}</td>
+                          <td className="text-right">{m.cantidad}</td>
                           <td>{m.unidad}</td>
-                          <td>{m.valor}</td>
+                          <td className="text-right">
+                            {Number(m.valor ?? 0).toLocaleString('es-GT')}
+                          </td>
                         </tr>
                       ))}
-                      {(!detalle.duca?.mercancias || detalle.duca.mercancias.length === 0) && (
-                        <tr><td colSpan="5" className="text-center">Sin mercancías.</td></tr>
+                      {(!detalle.duca?.mercancias ||
+                        detalle.duca.mercancias.length === 0) && (
+                        <tr>
+                          <td colSpan="5" className="text-center opacity-70">
+                            Sin mercancías.
+                          </td>
+                        </tr>
                       )}
                     </tbody>
                   </table>
                 </div>
 
                 {/* Historial */}
-                <div className="card-sub mt-3">
-                  <h4>Historial</h4>
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Fecha</th><th>Estado</th><th>Motivo</th><th>Por</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(detalle.historial || []).map((h, i) => (
-                        <tr key={i}>
-                          <td>{h.creado_en}</td>
-                          <td>{h.estado}</td>
-                          <td>{h.motivo || ''}</td>
-                          <td>{h.usuario || ''}</td>
-                        </tr>
-                      ))}
-                      {(!detalle.historial || detalle.historial.length === 0) && (
-                        <tr><td colSpan="4" className="text-center">Sin historial.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
+                <div className="card-sub">
+                  <h4 className="mb-2 font-semibold">Historial</h4>
+                  <ul className="space-y-2">
+                    {(detalle.historial || []).map((h, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <div className="w-40 shrink-0 text-sm opacity-80">
+                          {formatFecha(h.creado_en)}
+                        </div>
+                        <div>
+                          <div className="font-medium">{h.estado}</div>
+                          {h.motivo && (
+                            <div className="text-sm opacity-90">
+                              Motivo: {h.motivo}
+                            </div>
+                          )}
+                          {h.usuario && (
+                            <div className="text-xs opacity-70">
+                              Por: {h.usuario}
+                            </div>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                    {(!detalle.historial || detalle.historial.length === 0) && (
+                      <li className="text-center opacity-70">Sin historial.</li>
+                    )}
+                  </ul>
                 </div>
-
-                {/* Acciones dentro del modal */}
-                <div className="mt-4 flex flex-col gap-3">
-                  <div className="flex items-center gap-2">
-                    <button
-                      className="btn btn-primary"
-                      onClick={onAprobar}
-                      disabled={submitting}
-                    >
-                      Aprobar
-                    </button>
-
-                    <button
-                      className="btn danger"
-                      onClick={onRechazar}
-                      disabled={submitting}
-                    >
-                      Rechazar
-                    </button>
-                  </div>
-
-                  {/* Motivo (solo necesario si rechazará) */}
-                  <div>
-                    <label className="label">Motivo de rechazo (obligatorio al rechazar)</label>
-                    <textarea
-                      className="input"
-                      rows="3"
-                      value={motivo}
-                      onChange={e => setMotivo(e.target.value)}
-                      placeholder="Escribe el motivo si vas a rechazar…"
-                    />
-                  </div>
-                </div>
-              </>
+              </div>
             )}
           </div>
         </div>
       )}
     </div>
   )
+}
+
+/* -----------------------------------------------------------
+   Utilidad para convertir cualquier respuesta JSON en texto amable
+   (por si usas alert/tu toast). No modifica el flujo del componente.
+----------------------------------------------------------- */
+function extraerMensaje(raw) {
+  if (!raw) return ''
+  try {
+    const j = JSON.parse(raw)
+    if (typeof j === 'string') return j
+    if (j?.message) return j.message
+    if (j?.error) return j.error
+  } catch (_) {
+    /* no-op */
+  }
+  return raw
 }
