@@ -7,15 +7,32 @@ import {
   detalleEstado,
 } from '../api'
 
-// Formateador de fecha para mostrar de forma amigable
+// ────────────────────────────────────────────────────────────
+// Utilidades de formato
+// ────────────────────────────────────────────────────────────
 const dtf = new Intl.DateTimeFormat('es-GT', {
   dateStyle: 'medium',
   timeStyle: 'short',
 })
+const nfmt = new Intl.NumberFormat('es-GT')
+
 const formatFecha = (v) => {
   if (!v) return ''
   const d = new Date(v)
   return isNaN(d) ? String(v) : dtf.format(d)
+}
+const formatQ = (v) => nfmt.format(Number(v ?? 0))
+
+// Extraer mensaje humano de errores del backend
+function extraerMensaje(raw) {
+  if (!raw) return ''
+  try {
+    const j = JSON.parse(raw)
+    if (typeof j === 'string') return j
+    if (j?.message) return j.message
+    if (j?.error) return j.error
+  } catch (_) {}
+  return raw
 }
 
 export default function Validacion({ token: tokenProp }) {
@@ -24,10 +41,12 @@ export default function Validacion({ token: tokenProp }) {
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
   const [open, setOpen] = useState(false)
   const [numero, setNumero] = useState('')
   const [detalle, setDetalle] = useState(null)
   const [detalleError, setDetalleError] = useState('')
+
   const [submitting, setSubmitting] = useState(false)
 
   const load = async () => {
@@ -47,6 +66,9 @@ export default function Validacion({ token: tokenProp }) {
     load()
   }, [])
 
+  // ────────────────────────────────────────────────────────────
+  // Acciones
+  // ────────────────────────────────────────────────────────────
   const verDetalle = async (num) => {
     setNumero(num)
     setOpen(true)
@@ -98,6 +120,9 @@ export default function Validacion({ token: tokenProp }) {
     }
   }
 
+  // ────────────────────────────────────────────────────────────
+  // Vista
+  // ────────────────────────────────────────────────────────────
   return (
     <div className="container py-8">
       <div className="card">
@@ -176,10 +201,10 @@ export default function Validacion({ token: tokenProp }) {
         </div>
       </div>
 
-      {/* Modal Detalle */}
+      {/* Modal • Detalle simplificado y profesional */}
       {open && (
         <div className="modal-backdrop">
-          <div className="modal max-w-4xl">
+          <div className="modal max-w-5xl">
             <div className="modal-header">
               <div className="flex items-center gap-3">
                 <h3 className="text-xl font-semibold">Detalle de la Declaración</h3>
@@ -211,77 +236,97 @@ export default function Validacion({ token: tokenProp }) {
             )}
 
             {detalle && (
-              <div className="space-y-6 text-base">
-                <p className="text-gray-300">
-                  A continuación puedes ver los datos principales de esta
-                  declaración. La información está simplificada para que sea
-                  fácil de leer y entender.
-                </p>
+              <div className="space-y-6">
+                {/* Encabezado con resumen clave */}
+                <div className="grid md:grid-cols-4 gap-3">
+                  <div className="card-sub">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Número</p>
+                    <p className="font-semibold">{detalle.duca?.numero_documento || numero}</p>
+                  </div>
+                  <div className="card-sub">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Fecha emisión</p>
+                    <p className="font-semibold">{formatFecha(detalle.duca?.fecha_emision)}</p>
+                  </div>
+                  <div className="card-sub">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">País emisor</p>
+                    <p className="font-semibold">{detalle.duca?.pais_emisor || '—'}</p>
+                  </div>
+                  <div className="card-sub">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Moneda</p>
+                    <p className="font-semibold">{detalle.duca?.moneda || '—'}</p>
+                  </div>
+                </div>
 
+                {/* Valor */}
                 <div className="grid md:grid-cols-3 gap-3">
-                  <div className="card-sub">
-                    <p className="text-sm font-semibold text-gray-400">
-                      Fecha de emisión
-                    </p>
-                    <p className="text-lg font-medium">
-                      {formatFecha(detalle.duca?.fecha_emision)}
-                    </p>
-                  </div>
-                  <div className="card-sub">
-                    <p className="text-sm font-semibold text-gray-400">Moneda</p>
-                    <p className="text-lg font-medium">{detalle.duca?.moneda}</p>
-                  </div>
-                  <div className="card-sub">
-                    <p className="text-sm font-semibold text-gray-400">
-                      Valor declarado
-                    </p>
-                    <p className="text-lg font-medium">
-                      {Number(detalle.duca?.valor_aduana_total ?? 0).toLocaleString('es-GT')} Q
+                  <div className="card-sub md:col-span-1">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Valor aduana</p>
+                    <p className="text-2xl font-extrabold">
+                      {formatQ(detalle.duca?.valor_aduana_total)}
                     </p>
                   </div>
                 </div>
 
+                {/* Importador / Exportador */}
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="card-sub">
-                    <h4 className="text-lg font-semibold mb-2">Datos del Importador</h4>
-                    <ul className="list-disc ml-5 space-y-1">
-                      <li><strong>Nombre:</strong> {detalle.duca?.importador?.nombre || 'No disponible'}</li>
-                      <li><strong>Documento:</strong> {detalle.duca?.importador?.documento || 'No disponible'}</li>
-                      <li><strong>País:</strong> {detalle.duca?.importador?.pais || 'No disponible'}</li>
-                    </ul>
+                    <h4 className="text-lg font-semibold mb-2">Importador</h4>
+                    <dl className="grid grid-cols-3 gap-x-4 gap-y-2">
+                      <dt className="col-span-1 text-gray-400">Nombre</dt>
+                      <dd className="col-span-2 font-medium">
+                        {detalle.duca?.importador?.nombre || '—'}
+                      </dd>
+
+                      <dt className="col-span-1 text-gray-400">Documento</dt>
+                      <dd className="col-span-2 font-medium">
+                        {detalle.duca?.importador?.documento || '—'}
+                      </dd>
+                    </dl>
                   </div>
 
                   <div className="card-sub">
-                    <h4 className="text-lg font-semibold mb-2">Datos del Exportador</h4>
-                    <ul className="list-disc ml-5 space-y-1">
-                      <li><strong>Nombre:</strong> {detalle.duca?.exportador?.nombre || 'No disponible'}</li>
-                      <li><strong>Documento:</strong> {detalle.duca?.exportador?.documento || 'No disponible'}</li>
-                      <li><strong>País:</strong> {detalle.duca?.exportador?.pais || 'No disponible'}</li>
-                    </ul>
-                  </div>
+                    <h4 className="text-lg font-semibold mb-2">Exportador</h4>
+                    <dl className="grid grid-cols-3 gap-x-4 gap-y-2">
+                      <dt className="col-span-1 text-gray-400">Nombre</dt>
+                      <dd className="col-span-2 font-medium">
+                        {detalle.duca?.exportador?.nombre || '—'}
+                      </dd>
 
-                  <div className="card-sub">
-                    <h4 className="text-lg font-semibold mb-2">Transporte Utilizado</h4>
-                    <ul className="list-disc ml-5 space-y-1">
-                      <li><strong>Medio:</strong> {detalle.duca?.transporte?.medio || 'No disponible'}</li>
-                      <li><strong>Placa:</strong> {detalle.duca?.transporte?.placa || 'No disponible'}</li>
-                      <li><strong>Conductor:</strong> {detalle.duca?.transporte?.conductor || 'No disponible'}</li>
-                      <li><strong>Ruta:</strong> {detalle.duca?.transporte?.ruta || 'No disponible'}</li>
-                    </ul>
-                  </div>
-
-                  <div className="card-sub">
-                    <h4 className="text-lg font-semibold mb-2">Información General</h4>
-                    <ul className="list-disc ml-5 space-y-1">
-                      <li><strong>Número de documento:</strong> {detalle.duca?.numero_documento}</li>
-                      <li><strong>País que emite:</strong> {detalle.duca?.pais_emisor}</li>
-                    </ul>
+                      <dt className="col-span-1 text-gray-400">Documento</dt>
+                      <dd className="col-span-2 font-medium">
+                        {detalle.duca?.exportador?.documento || '—'}
+                      </dd>
+                    </dl>
                   </div>
                 </div>
 
-                <p className="mt-4 text-sm text-gray-400 italic">
-                  Si necesitas más información o notas algún dato incorrecto,
-                  contacta con la administración o el encargado de validación.
+                {/* Transporte */}
+                <div className="card-sub">
+                  <h4 className="text-lg font-semibold mb-2">Transporte</h4>
+                  <dl className="grid md:grid-cols-4 gap-x-6 gap-y-2">
+                    <div>
+                      <dt className="text-gray-400">Medio</dt>
+                      <dd className="font-medium">{detalle.duca?.transporte?.medio || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-400">Placa</dt>
+                      <dd className="font-medium">{detalle.duca?.transporte?.placa || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-400">Conductor</dt>
+                      <dd className="font-medium">{detalle.duca?.transporte?.conductor || '—'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-gray-400">Ruta</dt>
+                      <dd className="font-medium">{detalle.duca?.transporte?.ruta || '—'}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <p className="mt-2 text-sm text-gray-400">
+                  Revisa que los datos correspondan a la documentación presentada.
+                  Usa los botones de <span className="font-semibold">Aprobar</span> o{' '}
+                  <span className="font-semibold">Rechazar</span> en la tabla superior.
                 </p>
               </div>
             )}
@@ -290,16 +335,4 @@ export default function Validacion({ token: tokenProp }) {
       )}
     </div>
   )
-}
-
-// utilidad para limpiar mensajes de error del backend
-function extraerMensaje(raw) {
-  if (!raw) return ''
-  try {
-    const j = JSON.parse(raw)
-    if (typeof j === 'string') return j
-    if (j?.message) return j.message
-    if (j?.error) return j.error
-  } catch (_) {}
-  return raw
 }
