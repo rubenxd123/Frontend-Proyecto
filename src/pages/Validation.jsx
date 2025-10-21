@@ -7,7 +7,7 @@ import {
   detalleEstado,
 } from '../api'
 
-// Formateador de fecha legible para usuario final
+// Formateador de fecha para mostrar de forma amigable
 const dtf = new Intl.DateTimeFormat('es-GT', {
   dateStyle: 'medium',
   timeStyle: 'short',
@@ -21,12 +21,9 @@ const formatFecha = (v) => {
 export default function Validacion({ token: tokenProp }) {
   const token = tokenProp || localStorage.getItem('token') || ''
 
-  // listado
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-
-  // modal detalle
   const [open, setOpen] = useState(false)
   const [numero, setNumero] = useState('')
   const [detalle, setDetalle] = useState(null)
@@ -48,7 +45,6 @@ export default function Validacion({ token: tokenProp }) {
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const verDetalle = async (num) => {
@@ -72,32 +68,31 @@ export default function Validacion({ token: tokenProp }) {
     setDetalleError('')
   }
 
-  // Acciones desde la tabla (único lugar con aprobar/rechazar)
   const onApprove = async (num) => {
-    if (!confirm(`¿Aprobar la declaración ${num}?`)) return
+    if (!confirm(`¿Deseas aprobar la declaración ${num}?`)) return
     setSubmitting(true)
     try {
       await aprobarDUCA(token, num)
       await load()
-      // mensaje amable (usa tu toast si tienes)
-      alert('Declaración aprobada')
+      alert('✅ Declaración aprobada con éxito.')
     } catch (e) {
-      alert(extraerMensaje(e?.message) || 'No se pudo aprobar')
+      alert(extraerMensaje(e?.message) || 'No se pudo aprobar.')
     } finally {
       setSubmitting(false)
     }
   }
 
   const onReject = async (num) => {
-    const motivo = prompt(`Motivo de rechazo para ${num}:`) || ''
+    const motivo = prompt(`Por favor, indica el motivo del rechazo de ${num}:`) || ''
     if (!motivo.trim()) return
+    if (!confirm(`¿Confirmas rechazar la declaración ${num}?`)) return
     setSubmitting(true)
     try {
       await rechazarDUCA(token, num, motivo.trim())
       await load()
-      alert('Declaración rechazada')
+      alert('❌ Declaración rechazada correctamente.')
     } catch (e) {
-      alert(extraerMensaje(e?.message) || 'No se pudo rechazar')
+      alert(extraerMensaje(e?.message) || 'No se pudo rechazar.')
     } finally {
       setSubmitting(false)
     }
@@ -153,7 +148,7 @@ export default function Validacion({ token: tokenProp }) {
                         Aprobar
                       </button>
                       <button
-                        className="btn btn-ghost"
+                        className="btn bg-red-600 text-white hover:bg-red-700"
                         onClick={() => onReject(r.numero_documento)}
                         disabled={submitting}
                       >
@@ -181,13 +176,13 @@ export default function Validacion({ token: tokenProp }) {
         </div>
       </div>
 
-      {/* Modal de Detalle (solo visualización) */}
+      {/* Modal Detalle */}
       {open && (
         <div className="modal-backdrop">
-          <div className="modal max-w-5xl">
+          <div className="modal max-w-4xl">
             <div className="modal-header">
               <div className="flex items-center gap-3">
-                <h3 className="text-xl font-semibold">Detalle</h3>
+                <h3 className="text-xl font-semibold">Detalle de la Declaración</h3>
                 {numero && (
                   <span className="font-mono text-sm opacity-80">{numero}</span>
                 )}
@@ -205,11 +200,7 @@ export default function Validacion({ token: tokenProp }) {
                   </span>
                 )}
               </div>
-              <button
-                className="btn btn-ghost"
-                onClick={cerrarModal}
-                disabled={submitting}
-              >
+              <button className="btn btn-ghost" onClick={cerrarModal}>
                 Cerrar
               </button>
             </div>
@@ -220,174 +211,78 @@ export default function Validacion({ token: tokenProp }) {
             )}
 
             {detalle && (
-              <div className="space-y-6">
-                {/* Resumen */}
+              <div className="space-y-6 text-base">
+                <p className="text-gray-300">
+                  A continuación puedes ver los datos principales de esta
+                  declaración. La información está simplificada para que sea
+                  fácil de leer y entender.
+                </p>
+
                 <div className="grid md:grid-cols-3 gap-3">
                   <div className="card-sub">
-                    <div className="text-xs uppercase opacity-70">
-                      Fecha emisión
-                    </div>
-                    <div className="text-lg">
+                    <p className="text-sm font-semibold text-gray-400">
+                      Fecha de emisión
+                    </p>
+                    <p className="text-lg font-medium">
                       {formatFecha(detalle.duca?.fecha_emision)}
-                    </div>
+                    </p>
                   </div>
                   <div className="card-sub">
-                    <div className="text-xs uppercase opacity-70">Moneda</div>
-                    <div className="text-lg">{detalle.duca?.moneda}</div>
+                    <p className="text-sm font-semibold text-gray-400">Moneda</p>
+                    <p className="text-lg font-medium">{detalle.duca?.moneda}</p>
                   </div>
                   <div className="card-sub">
-                    <div className="text-xs uppercase opacity-70">
-                      Valor aduana
-                    </div>
-                    <div className="text-lg">
-                      {Number(detalle.duca?.valor_aduana_total ?? 0).toLocaleString(
-                        'es-GT'
-                      )}
-                    </div>
+                    <p className="text-sm font-semibold text-gray-400">
+                      Valor declarado
+                    </p>
+                    <p className="text-lg font-medium">
+                      {Number(detalle.duca?.valor_aduana_total ?? 0).toLocaleString('es-GT')} Q
+                    </p>
                   </div>
                 </div>
 
-                {/* Bloques principales */}
                 <div className="grid md:grid-cols-2 gap-4">
                   <div className="card-sub">
-                    <h4 className="mb-2 font-semibold">Importador</h4>
-                    <dl className="dl">
-                      <div>
-                        <dt>Nombre</dt>
-                        <dd>{detalle.duca?.importador?.nombre}</dd>
-                      </div>
-                      <div>
-                        <dt>Documento</dt>
-                        <dd>{detalle.duca?.importador?.documento}</dd>
-                      </div>
-                      <div>
-                        <dt>País</dt>
-                        <dd>{detalle.duca?.importador?.pais}</dd>
-                      </div>
-                    </dl>
+                    <h4 className="text-lg font-semibold mb-2">Datos del Importador</h4>
+                    <ul className="list-disc ml-5 space-y-1">
+                      <li><strong>Nombre:</strong> {detalle.duca?.importador?.nombre || 'No disponible'}</li>
+                      <li><strong>Documento:</strong> {detalle.duca?.importador?.documento || 'No disponible'}</li>
+                      <li><strong>País:</strong> {detalle.duca?.importador?.pais || 'No disponible'}</li>
+                    </ul>
                   </div>
 
                   <div className="card-sub">
-                    <h4 className="mb-2 font-semibold">Exportador</h4>
-                    <dl className="dl">
-                      <div>
-                        <dt>Nombre</dt>
-                        <dd>{detalle.duca?.exportador?.nombre}</dd>
-                      </div>
-                      <div>
-                        <dt>Documento</dt>
-                        <dd>{detalle.duca?.exportador?.documento}</dd>
-                      </div>
-                      <div>
-                        <dt>País</dt>
-                        <dd>{detalle.duca?.exportador?.pais}</dd>
-                      </div>
-                    </dl>
+                    <h4 className="text-lg font-semibold mb-2">Datos del Exportador</h4>
+                    <ul className="list-disc ml-5 space-y-1">
+                      <li><strong>Nombre:</strong> {detalle.duca?.exportador?.nombre || 'No disponible'}</li>
+                      <li><strong>Documento:</strong> {detalle.duca?.exportador?.documento || 'No disponible'}</li>
+                      <li><strong>País:</strong> {detalle.duca?.exportador?.pais || 'No disponible'}</li>
+                    </ul>
                   </div>
 
                   <div className="card-sub">
-                    <h4 className="mb-2 font-semibold">Transporte</h4>
-                    <dl className="dl">
-                      <div>
-                        <dt>Medio</dt>
-                        <dd>{detalle.duca?.transporte?.medio}</dd>
-                      </div>
-                      <div>
-                        <dt>Placa</dt>
-                        <dd>{detalle.duca?.transporte?.placa}</dd>
-                      </div>
-                      <div>
-                        <dt>Conductor</dt>
-                        <dd>{detalle.duca?.transporte?.conductor}</dd>
-                      </div>
-                      <div>
-                        <dt>Ruta</dt>
-                        <dd>{detalle.duca?.transporte?.ruta}</dd>
-                      </div>
-                    </dl>
+                    <h4 className="text-lg font-semibold mb-2">Transporte Utilizado</h4>
+                    <ul className="list-disc ml-5 space-y-1">
+                      <li><strong>Medio:</strong> {detalle.duca?.transporte?.medio || 'No disponible'}</li>
+                      <li><strong>Placa:</strong> {detalle.duca?.transporte?.placa || 'No disponible'}</li>
+                      <li><strong>Conductor:</strong> {detalle.duca?.transporte?.conductor || 'No disponible'}</li>
+                      <li><strong>Ruta:</strong> {detalle.duca?.transporte?.ruta || 'No disponible'}</li>
+                    </ul>
                   </div>
 
                   <div className="card-sub">
-                    <h4 className="mb-2 font-semibold">Datos generales</h4>
-                    <dl className="dl">
-                      <div>
-                        <dt>Número</dt>
-                        <dd>{detalle.duca?.numero_documento}</dd>
-                      </div>
-                      <div>
-                        <dt>País emisor</dt>
-                        <dd>{detalle.duca?.pais_emisor}</dd>
-                      </div>
-                    </dl>
+                    <h4 className="text-lg font-semibold mb-2">Información General</h4>
+                    <ul className="list-disc ml-5 space-y-1">
+                      <li><strong>Número de documento:</strong> {detalle.duca?.numero_documento}</li>
+                      <li><strong>País que emite:</strong> {detalle.duca?.pais_emisor}</li>
+                    </ul>
                   </div>
                 </div>
 
-                {/* Mercancías */}
-                <div className="card-sub">
-                  <h4 className="mb-2 font-semibold">Mercancías</h4>
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Descripción</th>
-                        <th className="text-right">Cantidad</th>
-                        <th>Unidad</th>
-                        <th className="text-right">Valor</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(detalle.duca?.mercancias || []).map((m, i) => (
-                        <tr key={i}>
-                          <td>{m.itemNo}</td>
-                          <td>{m.descripcion}</td>
-                          <td className="text-right">{m.cantidad}</td>
-                          <td>{m.unidad}</td>
-                          <td className="text-right">
-                            {Number(m.valor ?? 0).toLocaleString('es-GT')}
-                          </td>
-                        </tr>
-                      ))}
-                      {(!detalle.duca?.mercancias ||
-                        detalle.duca.mercancias.length === 0) && (
-                        <tr>
-                          <td colSpan="5" className="text-center opacity-70">
-                            Sin mercancías.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Historial */}
-                <div className="card-sub">
-                  <h4 className="mb-2 font-semibold">Historial</h4>
-                  <ul className="space-y-2">
-                    {(detalle.historial || []).map((h, i) => (
-                      <li key={i} className="flex items-start gap-3">
-                        <div className="w-40 shrink-0 text-sm opacity-80">
-                          {formatFecha(h.creado_en)}
-                        </div>
-                        <div>
-                          <div className="font-medium">{h.estado}</div>
-                          {h.motivo && (
-                            <div className="text-sm opacity-90">
-                              Motivo: {h.motivo}
-                            </div>
-                          )}
-                          {h.usuario && (
-                            <div className="text-xs opacity-70">
-                              Por: {h.usuario}
-                            </div>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                    {(!detalle.historial || detalle.historial.length === 0) && (
-                      <li className="text-center opacity-70">Sin historial.</li>
-                    )}
-                  </ul>
-                </div>
+                <p className="mt-4 text-sm text-gray-400 italic">
+                  Si necesitas más información o notas algún dato incorrecto,
+                  contacta con la administración o el encargado de validación.
+                </p>
               </div>
             )}
           </div>
@@ -397,10 +292,7 @@ export default function Validacion({ token: tokenProp }) {
   )
 }
 
-/* -----------------------------------------------------------
-   Utilidad para convertir cualquier respuesta JSON en texto amable
-   (por si usas alert/tu toast). No modifica el flujo del componente.
------------------------------------------------------------ */
+// utilidad para limpiar mensajes de error del backend
 function extraerMensaje(raw) {
   if (!raw) return ''
   try {
@@ -408,8 +300,6 @@ function extraerMensaje(raw) {
     if (typeof j === 'string') return j
     if (j?.message) return j.message
     if (j?.error) return j.error
-  } catch (_) {
-    /* no-op */
-  }
+  } catch (_) {}
   return raw
 }
