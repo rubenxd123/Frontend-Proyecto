@@ -1,267 +1,322 @@
 // src/pages/Validacion.jsx
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react';
 import {
   listarValidacionPendientes,
   aprobarDUCA,
   rechazarDUCA,
   detalleEstado,
-} from '../api'
+} from '../api';
 
-const fmtDate = (iso) => {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  const fecha = new Intl.DateTimeFormat('es-GT', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-  }).format(d)
-  const hora = new Intl.DateTimeFormat('es-GT', {
-    hour: 'numeric', minute: '2-digit',
-  }).format(d)
-  return `${fecha}, ${hora}`
+// ------------------------- Helpers de UI y formato -------------------------
+const fmtFechaCortaHora = (isoLike) => {
+  if (!isoLike) return '';
+  try {
+    const dt = new Date(isoLike);
+    return dt.toLocaleString('es-GT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return String(isoLike || '');
+  }
+};
+
+const fmtNumeroMiles = (n) => {
+  const num = Number(n);
+  if (Number.isNaN(num)) return '';
+  return num.toLocaleString('es-GT');
+};
+
+// Mensajes limpios (sin JSON)
+function extractHumanMessage(err) {
+  const raw = (err && err.message) ? String(err.message) : String(err || '');
+  // Si viene como {"error":"texto"} o texto suelto
+  const m = raw.match(/"error"\s*:\s*"([^"]+)"/i);
+  return (m && m[1]) || raw || 'Ocurrió un error.';
 }
 
-const fmtMoney = (n) =>
-  (n ?? n === 0)
-    ? new Intl.NumberFormat('es-GT', { minimumFractionDigits: 0 }).format(n)
-    : '—'
-
-const Pill = ({ children, color = 'slate' }) => {
-  const COLORS = {
-    slate:
-      'bg-slate-800/40 text-slate-200 border border-slate-600/40',
-    green:
-      'bg-emerald-600/15 text-emerald-300 border border-emerald-600/30',
-    red:
-      'bg-rose-600/15 text-rose-300 border border-rose-600/30',
-  }
-  return (
-    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${COLORS[color]}`}>
-      {children}
-    </span>
-  )
+function toast(msg) {
+  // Si ya usas un toast global, reemplaza esta línea por tu notificador.
+  // Esta versión minimalista no muestra JSON.
+  window.alert(msg);
 }
 
-export default function Validacion({ token }) {
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [busyRow, setBusyRow] = useState('')
-  const [detail, setDetail] = useState(null) // {numero, estado, duca:{...}}
-  const [refreshKey, setRefreshKey] = useState(0)
+// ------------------------- UI atómica -------------------------
+function BloqueDato({ label, value }) {
+  return (
+    <div className="space-y-1">
+      <div className="text-xs uppercase opacity-70 tracking-wide">{label}</div>
+      <div className="text-base">{value || <span className="opacity-50">—</span>}</div>
+    </div>
+  );
+}
 
-  const load = async () => {
-    setLoading(true)
-    try {
-      const data = await listarValidacionPendientes(token)
-      setItems(Array.isArray(data) ? data : [])
-    } catch (e) {
-      console.error(e)
-      alert('No se pudo cargar la lista de pendientes.')
-    } finally {
-      setLoading(false)
-    }
-  }
+function SeccionCard({ title, children }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="text-sm font-semibold mb-3 opacity-90">{title}</div>
+      <div className="grid gap-3">{children}</div>
+    </div>
+  );
+}
 
-  useEffect(() => { load() }, [refreshKey]) // re-carga al actualizar
+// ------------------------- Panel de Detalle -------------------------
+function DetalleDeclaracion({ detalle, onClose }) {
+  // detalle = { numero, estado, historial, duca }
+  const d = detalle?.duca || null;
 
-  const onVer = async (numero) => {
-    try {
-      const d = await detalleEstado(token, numero)
-      setDetail(d) // {numero, estado, historial, duca}
-      // hacemos scroll suave al panel de detalle
-      setTimeout(() => {
-        document.getElementById('detalle-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 0)
-    } catch (e) {
-      console.error(e)
-      alert('No se pudo obtener el detalle.')
-    }
-  }
+  const numero      = d?.numero_documento || detalle?.numero || '';
+  const fechaEmision= fmtFechaCortaHora(d?.fecha_emision);
+  const paisEmisor  = d?.pais_emisor || '';
+  const moneda      = d?.moneda || '';
+  const valorAduana = fmtNumeroMiles(d?.valor_aduana_total);
 
-  const onAccion = async (tipo, numero) => {
-    if (busyRow) return
-    const confirmMsg = tipo === 'aprobar'
-      ? `¿Aprobar la DUCA ${numero}?`
-      : `¿Rechazar la DUCA ${numero}?`
-    if (!confirm(confirmMsg)) return
-
-    try {
-      setBusyRow(numero)
-      if (tipo === 'aprobar') await aprobarDUCA(token, numero)
-      else await rechazarDUCA(token, numero, 'Rechazado por revisión')
-      // si el detalle abierto corresponde a este número, lo limpiamos
-      if (detail?.numero === numero) setDetail(null)
-      setRefreshKey(k => k + 1)
-    } catch (e) {
-      console.error(e)
-      alert(`No fue posible ${tipo} la DUCA.`)
-    } finally {
-      setBusyRow('')
-    }
-  }
-
-  const rows = useMemo(() => items, [items])
-
-  const D = detail?.duca || null
-  const ultimoEstado = detail?.estado || 'DESCONOCIDO'
+  const imp = d?.importador || {};
+  const exp = d?.exportador || {};
+  const tra = d?.transporte || {};
 
   return (
-    <div className="container mx-auto px-5 py-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-slate-100">Pendientes / En revisión</h1>
+    <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5">
+      <div className="flex items-center gap-4 mb-4">
+        <h3 className="text-lg font-semibold">
+          Detalle de la Declaración
+          <span className="ml-3 text-xs rounded-full bg-white/10 px-2 py-1">
+            {numero}
+          </span>
+          {detalle?.estado && (
+            <span className="ml-2 text-xs rounded-full bg-white/10 px-2 py-1">
+              {detalle.estado}
+            </span>
+          )}
+        </h3>
         <button
-          onClick={() => setRefreshKey(k => k + 1)}
-          className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-100 text-sm"
-          disabled={loading}
-          title="Volver a cargar"
+          onClick={onClose}
+          className="ml-auto rounded-lg bg-white/10 hover:bg-white/20 px-3 py-2 text-sm"
         >
-          Actualizar
+          Cerrar
         </button>
       </div>
 
-      <div className="rounded-lg border border-slate-700/60 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-800/60 text-slate-300">
-            <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:text-left">
-              <th>Número</th>
-              <th>Estado</th>
-              <th>Creado</th>
-              <th className="text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-700/60">
-            {loading && (
-              <tr><td colSpan={4} className="px-3 py-4 text-center text-slate-400">Cargando…</td></tr>
-            )}
-            {!loading && rows.length === 0 && (
-              <tr><td colSpan={4} className="px-3 py-4 text-center text-slate-400">No hay pendientes.</td></tr>
-            )}
-            {rows.map((r) => (
-              <tr key={r.numero_documento} className="hover:bg-slate-800/30">
-                <td className="px-3 py-2 text-slate-100 font-medium">{r.numero_documento}</td>
-                <td className="px-3 py-2"><Pill color="slate">{r.estado_documento || 'PENDIENTE'}</Pill></td>
-                <td className="px-3 py-2 text-slate-300">{fmtDate(r.creado_en)}</td>
-                <td className="px-3 py-2">
-                  <div className="flex gap-2 justify-center">
-                    <button
-                      className={`px-3 py-1.5 rounded text-sm text-white bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50`}
-                      onClick={() => onAccion('aprobar', r.numero_documento)}
-                      disabled={busyRow === r.numero_documento}
-                    >
-                      Aprobar
-                    </button>
-                    <button
-                      className={`px-3 py-1.5 rounded text-sm text-white bg-rose-600 hover:bg-rose-500 disabled:opacity-50`}
-                      onClick={() => onAccion('rechazar', r.numero_documento)}
-                      disabled={busyRow === r.numero_documento}
-                    >
-                      Rechazar
-                    </button>
-                    <button
-                      className="px-3 py-1.5 rounded text-sm bg-slate-700 hover:bg-slate-600 text-slate-100"
-                      onClick={() => onVer(r.numero_documento)}
-                    >
-                      Ver
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Datos principales */}
+      <div className="grid md:grid-cols-4 gap-4 mb-6">
+        <SeccionCard title="Número">
+          <BloqueDato label="Número" value={numero} />
+        </SeccionCard>
+        <SeccionCard title="Fecha emisión">
+          <BloqueDato label="Fecha emisión" value={fechaEmision} />
+        </SeccionCard>
+        <SeccionCard title="País emisor">
+          <BloqueDato label="País" value={paisEmisor} />
+        </SeccionCard>
+        <SeccionCard title="Moneda / Valor">
+          <div className="grid grid-cols-2 gap-3">
+            <BloqueDato label="Moneda" value={moneda} />
+            <BloqueDato label="Valor aduana" value={valorAduana} />
+          </div>
+        </SeccionCard>
       </div>
 
-      {/* Detalle */}
-      {detail && (
-        <div id="detalle-panel" className="mt-6 rounded-lg border border-slate-700/60 p-5 bg-slate-900/40">
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-lg font-semibold text-slate-100">
-              Detalle de la Declaración
-            </h2>
-            <span className="text-slate-400 text-sm">{detail.numero}</span>
-            <Pill color={ultimoEstado === 'VALIDADA' ? 'green' : 'slate'}>
-              {ultimoEstado}
-            </Pill>
-            <div className="ml-auto">
-              <button
-                className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-100 text-sm"
-                onClick={() => setDetail(null)}
-              >
-                Cerrar
-              </button>
-            </div>
+      {/* Importador / Exportador */}
+      <div className="grid md:grid-cols-2 gap-4 mb-6">
+        <SeccionCard title="Importador">
+          <div className="grid md:grid-cols-3 gap-3">
+            <BloqueDato label="Nombre"    value={imp.nombre} />
+            <BloqueDato label="Documento" value={imp.documento} />
+            <BloqueDato label="País"      value={imp.pais} />
           </div>
-
-          {/* Encabezado compacto */}
-          <div className="grid md:grid-cols-4 gap-4 mb-4">
-            <div>
-              <div className="text-slate-400 text-xs">Número</div>
-              <div className="text-slate-100 font-medium">{D?.numero_documento || detail?.numero || '—'}</div>
-            </div>
-            <div>
-              <div className="text-slate-400 text-xs">Fecha emisión</div>
-              <div className="text-slate-100 font-medium">{fmtDate(D?.fecha_emision)}</div>
-            </div>
-            <div>
-              <div className="text-slate-400 text-xs">País emisor</div>
-              <div className="text-slate-100 font-medium">{D?.pais_emisor || '—'}</div>
-            </div>
-            <div>
-              <div className="text-slate-400 text-xs">Moneda</div>
-              <div className="text-slate-100 font-medium">{D?.moneda || '—'}</div>
-            </div>
+        </SeccionCard>
+        <SeccionCard title="Exportador">
+          <div className="grid md:grid-cols-3 gap-3">
+            <BloqueDato label="Nombre"    value={exp.nombre} />
+            <BloqueDato label="Documento" value={exp.documento} />
+            <BloqueDato label="País"      value={exp.pais} />
           </div>
+        </SeccionCard>
+      </div>
 
-          {/* Valor aduana resaltado */}
-          <div className="mb-4">
-            <div className="text-slate-400 text-xs">Valor aduana</div>
-            <div className="text-2xl font-semibold text-slate-100">
-              {fmtMoney(D?.valor_aduana_total)}
-            </div>
+      {/* Transporte */}
+      <div className="grid md:grid-cols-4 gap-4">
+        <SeccionCard title="Transporte">
+          <div className="grid md:grid-cols-4 gap-3">
+            <BloqueDato label="Medio"      value={tra.medio} />
+            <BloqueDato label="Placa"      value={tra.placa} />
+            <BloqueDato label="Conductor"  value={tra.conductor} />
+            <BloqueDato label="Ruta"       value={tra.ruta} />
           </div>
+        </SeccionCard>
+      </div>
 
-          {/* Importador / Exportador */}
-          <div className="grid md:grid-cols-2 gap-6 mb-4">
-            <div className="rounded-lg border border-slate-700/60 p-4">
-              <div className="text-slate-300 font-semibold mb-3">Importador</div>
-              <InfoRow label="Nombre" value={D?.importador?.nombre} />
-              <InfoRow label="Documento" value={D?.importador?.documento} />
-              <InfoRow label="País" value={D?.importador?.pais} />
-            </div>
-            <div className="rounded-lg border border-slate-700/60 p-4">
-              <div className="text-slate-300 font-semibold mb-3">Exportador</div>
-              <InfoRow label="Nombre" value={D?.exportador?.nombre} />
-              <InfoRow label="Documento" value={D?.exportador?.documento} />
-              <InfoRow label="País" value={D?.exportador?.pais} />
-            </div>
-          </div>
-
-          {/* Transporte */}
-          <div className="rounded-lg border border-slate-700/60 p-4">
-            <div className="text-slate-300 font-semibold mb-3">Transporte</div>
-            <div className="grid md:grid-cols-4 gap-4">
-              <InfoRow label="Medio" value={D?.transporte?.medio} />
-              <InfoRow label="Placa" value={D?.transporte?.placa} />
-              <InfoRow label="Conductor" value={D?.transporte?.conductor} />
-              <InfoRow label="Ruta" value={D?.transporte?.ruta} />
-            </div>
-          </div>
-
-          {/* Nota para el revisor */}
-          <p className="text-slate-400 text-xs mt-4">
-            Revisa que los datos coincidan con la documentación presentada. Usa los botones de
-            <span className="text-cyan-300"> Aprobar</span> o
-            <span className="text-rose-300"> Rechazar</span> en la tabla superior.
-          </p>
-        </div>
-      )}
+      <div className="mt-6 text-xs opacity-70">
+        Revisa que los datos coincidan con la documentación presentada. Usa los
+        botones de <span className="font-semibold">Aprobar</span> o{' '}
+        <span className="font-semibold">Rechazar</span> en la tabla superior.
+      </div>
     </div>
-  )
+  );
 }
 
-function InfoRow({ label, value }) {
+// ------------------------- Página de Validación -------------------------
+export default function Validacion({ token: tokenProp }) {
+  const token = useMemo(
+    () => tokenProp || localStorage.getItem('token') || '',
+    [tokenProp]
+  );
+
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const [detalle, setDetalle] = useState(null);
+  const [loadingDetalle, setLoadingDetalle] = useState(false);
+
+  async function loadPendientes() {
+    try {
+      setLoading(true);
+      const data = await listarValidacionPendientes(token);
+      // Esperamos: [{numero_documento, estado_documento, creado_en}, ...]
+      setRows(Array.isArray(data) ? data : []);
+    } catch (e) {
+      toast(extractHumanMessage(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadPendientes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  async function handleVer(numero) {
+    try {
+      setLoadingDetalle(true);
+      const data = await detalleEstado(token, numero);
+      setDetalle(data);
+    } catch (e) {
+      toast(extractHumanMessage(e));
+    } finally {
+      setLoadingDetalle(false);
+    }
+  }
+
+  async function handleAprobar(numero) {
+    const ok = window.confirm(`¿Aprobar la declaración ${numero}?`);
+    if (!ok) return;
+    try {
+      await aprobarDUCA(token, numero);
+      toast('Declaración aprobada.');
+      await loadPendientes();
+      if (detalle?.numero === numero) {
+        // refrescar solo el estado visible
+        setDetalle((prev) => prev ? { ...prev, estado: 'VALIDADA' } : prev);
+      }
+    } catch (e) {
+      toast(extractHumanMessage(e));
+    }
+  }
+
+  async function handleRechazar(numero) {
+    let motivo = window.prompt(`Escribe el motivo del rechazo para ${numero}:`);
+    if (motivo === null) return; // canceló
+    motivo = motivo.trim();
+    if (!motivo) {
+      toast('Debes indicar un motivo.');
+      return;
+    }
+    try {
+      await rechazarDUCA(token, numero, motivo);
+      toast('Declaración rechazada.');
+      await loadPendientes();
+      if (detalle?.numero === numero) {
+        setDetalle((prev) => prev ? { ...prev, estado: 'RECHAZADA' } : prev);
+      }
+    } catch (e) {
+      toast(extractHumanMessage(e));
+    }
+  }
+
   return (
-    <div>
-      <div className="text-slate-400 text-xs">{label}</div>
-      <div className="text-slate-100">{value || '—'}</div>
+    <div className="p-6">
+      {/* Encabezado */}
+      <div className="flex items-center mb-4">
+        <h1 className="text-xl font-semibold">Pendientes / En revisión</h1>
+        <button
+          onClick={loadPendientes}
+          className="ml-auto rounded-lg bg-white/10 hover:bg-white/20 px-3 py-2 text-sm"
+        >
+          {loading ? 'Actualizando…' : 'Actualizar'}
+        </button>
+      </div>
+
+      {/* Tabla */}
+      <div className="rounded-2xl border border-white/10 overflow-hidden">
+        <div className="grid grid-cols-[1.2fr,1fr,1.4fr,1fr] gap-0 px-4 py-3 bg-white/5 text-sm font-semibold opacity-90">
+          <div>Número</div>
+          <div>Estado</div>
+          <div>Creado</div>
+          <div className="text-right pr-2">Acciones</div>
+        </div>
+
+        {rows.length === 0 && !loading && (
+          <div className="p-4 text-sm opacity-70">No hay pendientes.</div>
+        )}
+
+        {rows.map((r) => {
+          const numero = r.numero_documento || r.numero || '';
+          const estado = r.estado_documento || r.estado || 'PENDIENTE';
+          const creado = fmtFechaCortaHora(r.creado_en || r.creado || '');
+
+          return (
+            <div
+              key={numero}
+              className="grid grid-cols-[1.2fr,1fr,1.4fr,1fr] items-center px-4 py-3 border-t border-white/10 text-sm"
+            >
+              <div className="font-mono">{numero}</div>
+
+              <div>
+                <span className={`text-xs rounded-full px-2 py-1 ${
+                  estado === 'PENDIENTE' ? 'bg-white/10' : 'bg-emerald-500/20'
+                }`}>
+                  {estado}
+                </span>
+              </div>
+
+              <div className="opacity-80">{creado}</div>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  className="rounded-md bg-cyan-600/80 hover:bg-cyan-600 text-white px-3 py-1"
+                  onClick={() => handleAprobar(numero)}
+                >
+                  Aprobar
+                </button>
+                <button
+                  className="rounded-md bg-red-600/80 hover:bg-red-600 text-white px-3 py-1"
+                  onClick={() => handleRechazar(numero)}
+                >
+                  Rechazar
+                </button>
+                <button
+                  className="rounded-md bg-white/10 hover:bg-white/20 px-3 py-1"
+                  onClick={() => handleVer(numero)}
+                >
+                  {loadingDetalle && detalle?.numero === numero ? 'Cargando…' : 'Ver'}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Panel Detalle */}
+      {detalle && (
+        <DetalleDeclaracion
+          detalle={detalle}
+          onClose={() => setDetalle(null)}
+        />
+      )}
     </div>
-  )
+  );
 }
