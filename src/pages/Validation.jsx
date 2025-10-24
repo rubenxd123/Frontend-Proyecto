@@ -1,43 +1,91 @@
-import { useEffect, useState } from 'react'
-import { aprobarDUCA, listarValidacionPendientes, rechazarDUCA } from '../api'
+import React, { useEffect, useState } from "react";
 
-export default function Validation({ token }) {
-  const [rows, setRows] = useState([])
-  const [msg, setMsg] = useState('')
+function formatDateCell(item) {
+  const candidates = [
+    item?.creado,
+    item?.created,
+    item?.createdAt,
+    item?.created_at,
+    item?.fecha_emision,
+    item?.fechaEmision,
+    item?.created_iso,
+    item?.created_date,
+  ];
 
-  const load = async () => {
-    setMsg(''); try { setRows(await listarValidacionPendientes(token)); } catch(e){ setMsg(String(e)) }
+  for (const v of candidates) {
+    if (v == null) continue;
+
+    if (v instanceof Date && !isNaN(v.getTime())) {
+      return v.toLocaleDateString();
+    }
+
+    if (typeof v === "number" && !Number.isNaN(v)) {
+      const d = new Date(v);
+      if (!Number.isNaN(d.getTime())) return d.toLocaleDateString();
+    }
+
+    if (typeof v === "string" && v.trim() !== "") {
+      const d = new Date(v);
+      if (!Number.isNaN(d.getTime())) return d.toLocaleDateString();
+      return v.length > 10 ? v.slice(0, 10) : v;
+    }
   }
 
-  useEffect(()=>{ load() }, [])
+  return "-";
+}
 
-  const approve = async (n) => { try { await aprobarDUCA(token, n); await load(); } catch(e){ setMsg(String(e)) } }
-  const reject = async (n) => { const m = prompt('Motivo de rechazo'); try { await rechazarDUCA(token, n, m||''); await load(); } catch(e){ setMsg(String(e)) } }
+export default function Validation() {
+  const [data, setData] = useState([]);
+
+  useEffect(() => {
+    const fetchPendientes = async () => {
+      try {
+        const res = await fetch("https://aduanas-duca-api.onrender.com/validacion/pendientes");
+        const json = await res.json();
+        setData(Array.isArray(json) ? json : []);
+      } catch (err) {
+        console.error("Error fetching pendientes:", err);
+        setData([]);
+      }
+    };
+
+    fetchPendientes();
+  }, []);
 
   return (
     <div className="container py-8">
-      <div className="card">
-        <h2 className="mb-2">Pendientes / En revisión</h2>
-        <div className="overflow-x-auto">
-          <table>
-            <thead><tr><th>Número</th><th>Estado</th><th>Creado</th><th>Acciones</th></tr></thead>
-            <tbody>
-              {rows.map(r => (
-                <tr key={r.numero_documento}>
-                  <td>{r.numero_documento}</td>
-                  <td><span className="badge">{r.estado_documento}</span></td>
-                  <td>{new Date(r.creado_en).toLocaleString()}</td>
+      <h2 className="mb-2">Pendientes / En revisión</h2>
+      <div className="overflow-x-auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Número</th>
+              <th>Estado</th>
+              <th>Creado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.length === 0 ? (
+              <tr>
+                <td colSpan="4" style={{ color: "red" }}>Sin registros</td>
+              </tr>
+            ) : (
+              data.map((item, i) => (
+                <tr key={i}>
+                  <td>{item.numero || item.number || "-"}</td>
+                  <td><span className="badge">{item.estado || item.status}</span></td>
+                  <td>{formatDateCell(item)}</td>
                   <td className="space-x-2">
-                    <button className="btn btn-primary" onClick={()=>approve(r.numero_documento)}>Aprobar</button>
-                    <button className="btn btn-outline" onClick={()=>reject(r.numero_documento)}>Rechazar</button>
+                    <button className="btn btn-primary">Aprobar</button>
+                    <button className="btn btn-outline">Rechazar</button>
                   </td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {msg && <p className="text-red-400 text-sm mt-2">{msg}</p>}
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
-  )
+  );
 }
