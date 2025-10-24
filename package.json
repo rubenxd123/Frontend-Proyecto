@@ -1,23 +1,15 @@
 {
-  "name": "duca-frontend",
-  "version": "1.0.0",
-  "private": true,
+  "name": "aduanas-duca-api",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview --port 5173"
+    "start": "node src/server.js"
+  },
+  "engines": {
+    "node": "22.x"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.2",
-    "autoprefixer": "^10.4.20",
-    "postcss": "^8.4.44",
-    "tailwindcss": "^3.4.13",
-    "vite": "^5.4.10"
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "bcryptjs": "^2.4.3"
   }
 }
