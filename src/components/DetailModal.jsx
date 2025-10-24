@@ -1,6 +1,6 @@
 // src/components/DetailModal.jsx
 import React from "react";
-import { fetchJSON } from "../api";
+import { API_BASE } from "../api";
 
 /* ====================== Helpers ====================== */
 function formatFecha(fecha) {
@@ -36,6 +36,13 @@ function statusBadgeClass(statusRaw) {
     default:
       return `${base} bg-zinc-500/20 text-zinc-300 ring-1 ring-zinc-500/40`;
   }
+}
+async function fetchDucaDetail(numero) {
+  try {
+    const res = await fetch(`${API_BASE}/duca/${encodeURIComponent(numero)}`);
+    if (res.ok) return await res.json();
+  } catch {}
+  return null;
 }
 
 /* ====================== UI atoms ====================== */
@@ -125,27 +132,15 @@ export default function DetailModal({ open, onClose, baseItem }) {
 
   React.useEffect(() => {
     let mounted = true;
-    async function run() {
-      if (open && baseItem?.numero) {
-        setLoading(true);
-        try {
-          const d = await fetchJSON(`/duca/${encodeURIComponent(baseItem.numero)}`, {
-            timeout: 12000,
-          });
-          if (mounted) setDetail(d);
-        } catch {
-          if (mounted) setDetail(null);
-        } finally {
-          if (mounted) setLoading(false);
-        }
-      } else {
-        setDetail(null);
-      }
+    if (open && baseItem?.numero) {
+      setLoading(true);
+      fetchDucaDetail(baseItem.numero)
+        .then((d) => mounted && setDetail(d))
+        .finally(() => mounted && setLoading(false));
+    } else {
+      setDetail(null);
     }
-    run();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [open, baseItem?.numero]);
 
   if (!open) return null;
