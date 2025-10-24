@@ -1,105 +1,76 @@
-// ==========================================
-//  API CLIENTE para Frontend DUCA Aduanas
-//  Funciona en Render con Node 22 / Vite
-//  Autor: Rubén Morán
-// ==========================================
+const BASE = import.meta.env.VITE_API_URL || 'https://aduanas-duca-api.onrender.com'
 
-// URL base del backend (Render)
-const API_BASE = (
-  import.meta.env.VITE_API_URL ||
-  "https://aduanas-duca-api.onrender.com"
-).replace(/\/$/, "");
-
-// ---- RUTAS BACKEND ----
-const R = {
-  AUTH_LOGIN: "/api/auth/login",
-  DUCA_ESTADOS: "/api/duca/estados",
-  DUCA_VALIDACION: "/api/duca/validacion",
-  DUCA_REGISTRAR: "/api/duca/registrar",
-  USUARIOS: "/api/usuarios"
-};
-
-// ---- FUNCIÓN GENÉRICA FETCH ----
-async function request(path, { method = "GET", body, headers = {} } = {}) {
-  const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
-
-  const res = await fetch(url, {
-    method,
-    headers: {
-      Accept: "application/json",
-      ...(body ? { "Content-Type": "application/json" } : {}),
-      ...headers,
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-
+async function handle(res) {
   if (!res.ok) {
-    let msg = `HTTP ${res.status}`;
-    try {
-      const json = await res.json();
-      msg = json?.message || msg;
-    } catch (_) {}
-    throw new Error(msg);
+    let text = await res.text().catch(()=>'')
+    throw new Error(text || res.statusText)
   }
-
-  const ct = res.headers.get("content-type") || "";
-  return ct.includes("application/json") ? res.json() : res.text();
+  const ct = res.headers.get('content-type') || ''
+  if (ct.includes('application/json')) return res.json()
+  return res.text()
 }
 
-// ---- API BASE ----
-export const api = {
-  get: (p) => request(p),
-  post: (p, body) => request(p, { method: "POST", body }),
-  put: (p, body) => request(p, { method: "PUT", body }),
-  del: (p) => request(p, { method: "DELETE" }),
-};
-
-// ==========================================
-//            AUTENTICACIÓN
-// ==========================================
-export function login({ email, password }) {
-  return api.post(R.AUTH_LOGIN, { email, password });
+export async function login(email, password) {
+  const res = await fetch(BASE + '/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  })
+  return handle(res)
 }
 
-// ==========================================
-//            MÓDULO DUCA
-// ==========================================
+export async function getUsuarios(token) {
+  const res = await fetch(BASE + '/usuarios', {
+    headers: { Authorization: 'Bearer ' + token }
+  })
+  return handle(res)
+}
 
-// Obtener lista de estados
-export const getEstados = () => api.get(R.DUCA_ESTADOS);
+export async function crearUsuario(token, data) {
+  const res = await fetch(BASE + '/usuarios', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify(data)
+  })
+  return handle(res)
+}
 
-// Obtener lista de pendientes
-export const getPendientes = () => api.get(R.DUCA_VALIDACION);
+export async function registrarDUCA(token, payload) {
+  const res = await fetch(BASE + '/duca', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify(payload)
+  })
+  return handle(res)
+}
 
-// Crear un nuevo DUCA
-export const crearDuca = (payload) => api.post(R.DUCA_REGISTRAR, payload);
+export async function listarValidacionPendientes(token) {
+  const res = await fetch(BASE + '/validacion/pendientes', {
+    headers: { Authorization: 'Bearer ' + token }
+  })
+  return handle(res)
+}
 
-// ==========================================
-//            MÓDULO USUARIOS
-// ==========================================
-export const getUsuarios = () => api.get(R.USUARIOS);
-export const crearUsuario = (usuario) => api.post(R.USUARIOS, usuario);
+export async function aprobarDUCA(token, numero) {
+  const res = await fetch(BASE + `/validacion/${encodeURIComponent(numero)}/aprobar`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + token }
+  })
+  return handle(res)
+}
 
-// ==========================================
-//        ALIASES DE COMPATIBILIDAD
-//  (para evitar errores de imports en React)
-// ==========================================
+export async function rechazarDUCA(token, numero, motivo) {
+  const res = await fetch(BASE + `/validacion/${encodeURIComponent(numero)}/rechazar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ motivo })
+  })
+  return handle(res)
+}
 
-// Login.jsx usa esto:
-export { login as iniciarSesion };
-
-// DucaRegister.jsx usa esto:
-export const registrarDUCA = crearDuca;
-
-// Validation.jsx usa esto:
-export const obtenerPendientes = getPendientes;
-
-// States.jsx usa esto:
-export const obtenerEstados = getEstados;
-export const estados = getEstados;
-export const detalleEstado = (id) =>
-  api.get(`/api/duca/estados/${encodeURIComponent(id)}`);
-
-// ==========================================
-//           FIN DEL MÓDULO API FRONTEND
-// ==========================================
+export async function estados(token) {
+  const res = await fetch(BASE + '/estados', {
+    headers: { Authorization: 'Bearer ' + token }
+  })
+  return handle(res)
+}
