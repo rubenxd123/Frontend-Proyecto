@@ -1,9 +1,9 @@
 // src/api.js
-// Punto base del backend (Render)
+// ===================== Base de API =====================
 export const API_BASE =
   import.meta.env.VITE_API_BASE || "https://aduanas-duca-api.onrender.com";
 
-/* ===================== Helpers ===================== */
+// ===================== Helpers =====================
 function withTimeout(ms) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), ms);
@@ -19,7 +19,6 @@ function authHeader() {
   }
 }
 
-/* ===================== Cliente JSON ===================== */
 export async function fetchJSON(
   path,
   { method = "GET", headers, body, timeout = 12000 } = {}
@@ -60,19 +59,16 @@ export async function fetchJSON(
   }
 }
 
-export function getJSON(path, options) {
-  return fetchJSON(path, { ...(options || {}), method: "GET" });
-}
+export const getJSON = (path, options) =>
+  fetchJSON(path, { ...(options || {}), method: "GET" });
 
-export function postJSON(path, body, options) {
-  return fetchJSON(path, { ...(options || {}), method: "POST", body });
-}
+export const postJSON = (path, body, options) =>
+  fetchJSON(path, { ...(options || {}), method: "POST", body });
 
-/* ===================== Endpoints ===================== */
+// ===================== Endpoints =====================
 
-// Auth
+// Auth (ajusta la ruta si tu backend usa otra)
 export function login(email, password) {
-  // Ajusta la ruta si tu backend usa otra (p.ej. /auth o /usuarios/login)
   return postJSON("/auth/login", { email, password });
 }
 
@@ -93,18 +89,28 @@ export function rechazarNumero(numero, comentario) {
   });
 }
 
-// DUCA detalle por número
+// DUCA
 export function getDucaByNumero(numero) {
   return getJSON(`/duca/${encodeURIComponent(numero)}`);
 }
 
-// Usuarios (para src/pages/Users.jsx)
+// <-- NUEVO: registrar DUCA (usado en DucaRegister.jsx)
+export function registrarDUCA(payload) {
+  // 'payload' debe ser el objeto con los campos del formulario DUCA
+  // Si tu backend espera otra ruta (p.ej. /api/duca), cámbiala aquí:
+  return postJSON("/duca", payload);
+}
+
+// (Opcional) listado de estados de mis DUCA, por si el frontend lo llama
+export function getEstados() {
+  return getJSON("/duca/estados");
+}
+
+// Usuarios (para Users.jsx)
 export function getUsuarios() {
-  // Ajusta la ruta si tu backend lista usuarios en otra URL
   return getJSON("/usuarios");
 }
 
 export function crearUsuario(payload) {
-  // payload esperado p.ej.: { nombre, email, password, rol }
   return postJSON("/usuarios", payload);
 }
