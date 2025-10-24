@@ -1,5 +1,6 @@
 // src/api.js
-export const API_BASE = "https://aduanas-duca-api.onrender.com";
+export const API_BASE =
+  import.meta.env.VITE_API_BASE || "https://aduanas-duca-api.onrender.com";
 
 function withTimeout(ms) {
   const controller = new AbortController();
@@ -7,7 +8,7 @@ function withTimeout(ms) {
   return { signal: controller.signal, cancel: () => clearTimeout(id) };
 }
 
-export async function fetchJSON(path, { method = "GET", body, headers, timeout = 10000 } = {}) {
+export async function fetchJSON(path, { method = "GET", headers, body, timeout = 12000 } = {}) {
   const { signal, cancel } = withTimeout(timeout);
   try {
     const res = await fetch(`${API_BASE}${path}`, {
@@ -23,13 +24,15 @@ export async function fetchJSON(path, { method = "GET", body, headers, timeout =
       throw new Error(text || `HTTP ${res.status}`);
     }
     return await res.json();
-  } catch (e) {
-    if (e.name === "AbortError") throw new Error("La solicitud se tardó demasiado (timeout).");
-    if ((e.message || "").includes("Failed to fetch")) {
-      throw new Error("No se pudo conectar con el servidor. Intenta de nuevo.");
-    }
-    throw e;
   } finally {
     cancel();
   }
+}
+
+export function getJSON(path, options) {
+  return fetchJSON(path, { ...(options || {}), method: "GET" });
+}
+
+export function postJSON(path, body, options) {
+  return fetchJSON(path, { ...(options || {}), method: "POST", body });
 }
