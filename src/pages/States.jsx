@@ -1,8 +1,7 @@
 // src/pages/States.jsx
 import React from "react";
 import DetailModal from "../components/DetailModal";
-
-const API_BASE = "https://aduanas-duca-api.onrender.com";
+import { fetchJSON } from "../api";
 
 export default function States() {
   const [items, setItems] = React.useState([]);
@@ -19,26 +18,15 @@ export default function States() {
     switch (s) {
       case "PENDIENTE":
         return `${base} bg-yellow-500/20 text-yellow-300 ring-1 ring-yellow-500/40`;
-      case "EN_REVISION":
-      case "EN-REVISION":
-      case "EN REVISION":
-        return `${base} bg-blue-500/20 text-blue-300 ring-1 ring-blue-500/40`;
-      case "VALIDADA":
-        return `${base} bg-green-500/20 text-green-300 ring-1 ring-green-500/40`;
-      case "RECHAZADA":
-        return `${base} bg-red-500/20 text-red-300 ring-1 ring-red-500/40`;
-      default:
-        return `${base} bg-zinc-500/20 text-zinc-300 ring-1 ring-zinc-500/40`;
     }
+    return `${base} bg-zinc-500/20 text-zinc-300 ring-1 ring-zinc-500/40`;
   }
 
   async function loadData() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/estados`);
-      if (!res.ok) throw new Error("No se pudo cargar");
-      const data = await res.json();
+      const data = await fetchJSON("/estados", { timeout: 12000 });
       setItems(Array.isArray(data) ? data : []);
     } catch (e) {
       setError(e.message || "Error");
@@ -57,18 +45,18 @@ export default function States() {
   };
 
   return (
-    <div className="container py-8">
+    <div className="mx-auto w-full max-w-7xl px-4 py-8">
       <h2 className="mb-4 text-xl font-semibold">Estados de mis declaraciones</h2>
 
-      <div className="card">
+      <div className="rounded-2xl bg-zinc-900 ring-1 ring-white/10 shadow-sm">
         <div className="overflow-x-auto">
-          <table>
+          <table className="w-full table-auto">
             <thead>
               <tr>
-                <th>Número</th>
-                <th>Estado</th>
-                <th>Creado</th>
-                <th>Acciones</th>
+                <th className="text-left">Número</th>
+                <th className="text-left">Estado</th>
+                <th className="text-left">Creado</th>
+                <th className="text-left">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -81,8 +69,13 @@ export default function States() {
               )}
               {!loading && error && (
                 <tr>
-                  <td colSpan={4} className="text-center py-8 text-red-300">
-                    {error}
+                  <td colSpan={4} className="text-center py-8">
+                    <div className="inline-flex flex-col items-center gap-3">
+                      <div className="text-red-300">{error}</div>
+                      <button className="btn btn-primary" onClick={loadData}>
+                        Reintentar
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )}

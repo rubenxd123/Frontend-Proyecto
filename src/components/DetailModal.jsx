@@ -1,9 +1,8 @@
 // src/components/DetailModal.jsx
 import React from "react";
+import { API_BASE } from "../api";
 
 /* ====================== Helpers ====================== */
-const API_BASE = "https://aduanas-duca-api.onrender.com";
-
 function formatFecha(fecha) {
   if (!fecha) return "-";
   const d = new Date(fecha);
@@ -14,10 +13,7 @@ function formatMoney(v, currency = "USD") {
   const n = Number(v);
   if (Number.isNaN(n)) return v ?? "-";
   try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency
-    }).format(n);
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(n);
   } catch {
     return new Intl.NumberFormat().format(n);
   }
@@ -69,7 +65,6 @@ function Section({ title, children }) {
   );
 }
 
-/** Muestra JSON o texto en formato profesional */
 function PrettyObject({ value }) {
   if (value == null || value === "") {
     return (
@@ -130,7 +125,7 @@ function PrettyObject({ value }) {
   );
 }
 
-/* ====================== Modal Detalle ====================== */
+/* ====================== Modal ====================== */
 export default function DetailModal({ open, onClose, baseItem }) {
   const [loading, setLoading] = React.useState(false);
   const [detail, setDetail] = React.useState(null);
@@ -145,9 +140,7 @@ export default function DetailModal({ open, onClose, baseItem }) {
     } else {
       setDetail(null);
     }
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, [open, baseItem?.numero]);
 
   if (!open) return null;
@@ -162,8 +155,8 @@ export default function DetailModal({ open, onClose, baseItem }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="w-full max-w-5xl rounded-2xl bg-zinc-900 text-zinc-100 shadow-xl ring-1 ring-white/10">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
+      <div className="w-full max-w-6xl max-h-[85vh] overflow-y-auto rounded-2xl bg-zinc-900 text-zinc-100 shadow-xl ring-1 ring-white/10">
+        <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 border-b border-white/10 bg-zinc-900/95 backdrop-blur">
           <h3 className="text-lg font-semibold">Detalle del registro</h3>
           <button onClick={onClose} className="text-sm opacity-80 hover:opacity-100">
             Cerrar ✕
@@ -215,14 +208,14 @@ export default function DetailModal({ open, onClose, baseItem }) {
 
               {detail == null && (
                 <p className="text-sm text-zinc-400">
-                  No hay información adicional. Verifica que el backend exponga <code>/duca/:numero</code>.
+                  No hay información adicional. Verifica el endpoint <code>/duca/:numero</code>.
                 </p>
               )}
             </div>
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-white/10 flex justify-end">
+        <div className="px-5 py-4 border-t border-white/10 flex justify-end sticky bottom-0 bg-zinc-900/95 backdrop-blur">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500"
