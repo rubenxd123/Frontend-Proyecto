@@ -62,7 +62,9 @@ export function login({ email, password }) {
 export const getEstados = () => api.get(R.DUCA_ESTADOS);
 export const getPendientes = () => api.get(R.DUCA_VALIDACION);
 export const crearDuca = (payload) => api.post(R.DUCA_REGISTRAR, payload);
-// Alias para mantener compatibilidad con DucaRegister.jsx
+export { crearDuca as registrarDUCA };
+export { getEstados as obtenerEstados };
+export { getPendientes as obtenerPendientes };
 export { crearDuca as registrarDUCA };
 
 
