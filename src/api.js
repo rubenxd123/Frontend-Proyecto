@@ -1,42 +1,35 @@
 // src/api.js
+const API_URL = "https://aduanas-duca-api.onrender.com/api/duca"; // ✅ cambia si usas otro nombre de servicio
 
-// Rutas del documento
-export const ROUTES = {
-  AUTH_LOGIN: "/api/auth/login",
-  DUCA_ESTADOS: "/api/duca/estados",
-  DUCA_VALIDACION: "/api/duca/validacion",
-  DUCA_REGISTRAR: "/api/duca/registrar",
-};
-
-const API = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
-
-async function request(path, options = {}) {
-  const url = `${API}${path.startsWith("/") ? path : `/${path}`}`;
-  const res = await fetch(url, {
-    headers: { "Accept": "application/json", "Content-Type": "application/json" },
-    ...options,
-  });
-  if (!res.ok) {
-    const txt = await res.text().catch(() => "");
-    let msg = `HTTP ${res.status}`;
-    try { msg = JSON.parse(txt).message || msg; } catch {}
-    throw new Error(msg);
+// Manejo global de errores
+async function request(url, options = {}) {
+  try {
+    const res = await fetch(url, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.error("❌ Error de conexión:", err);
+    throw err;
   }
-  const ct = res.headers.get("content-type") || "";
-  return ct.includes("application/json") ? res.json() : res.text();
 }
 
-export const api = {
-  get: (p) => request(p),
-  post: (p, body) => request(p, { method: "POST", body: JSON.stringify(body) }),
-};
-
-// ← Para que el build no falle (Login.jsx importa "login")
-export function login({ email, password }) {
-  return api.post(ROUTES.AUTH_LOGIN, { email, password });
+// ✅ Registrar nueva DUCA
+export async function registrarDUCA(data) {
+  return request(`${API_URL}/registrar`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
-// Servicios DUCA usados por tus 3 pantallas
-export const getEstados    = () => api.get(ROUTES.DUCA_ESTADOS);
-export const getPendientes = () => api.get(ROUTES.DUCA_VALIDACION);
-export const crearDuca     = (payload) => api.post(ROUTES.DUCA_REGISTRAR, payload);
+// ✅ Obtener estados de DUCA
+export async function obtenerEstados() {
+  return request(`${API_URL}/estados`);
+}
+
+// ✅ Obtener DUCA pendientes / en revisión
+export async function obtenerPendientes() {
+  return request(`${API_URL}/validacion`);
+}
