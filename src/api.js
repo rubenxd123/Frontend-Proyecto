@@ -1,18 +1,25 @@
-// src/api.js
+// ==========================================
+//  API CLIENTE para Frontend DUCA Aduanas
+//  Funciona en Render con Node 22 / Vite
+//  Autor: Rubén Morán
+// ==========================================
 
-// Base de la API (usa .env si existe)
-const API_BASE = (import.meta.env.VITE_API_URL || "https://aduanas-duca-api.onrender.com").replace(/\/$/, "");
+// URL base del backend (Render)
+const API_BASE = (
+  import.meta.env.VITE_API_URL ||
+  "https://aduanas-duca-api.onrender.com"
+).replace(/\/$/, "");
 
-// Rutas backend
+// ---- RUTAS BACKEND ----
 const R = {
   AUTH_LOGIN: "/api/auth/login",
   DUCA_ESTADOS: "/api/duca/estados",
   DUCA_VALIDACION: "/api/duca/validacion",
   DUCA_REGISTRAR: "/api/duca/registrar",
-  USUARIOS: "/api/usuarios", // opcional si usas Users.jsx
+  USUARIOS: "/api/usuarios"
 };
 
-// Helper fetch
+// ---- FUNCIÓN GENÉRICA FETCH ----
 async function request(path, { method = "GET", body, headers = {} } = {}) {
   const url = `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 
@@ -29,9 +36,9 @@ async function request(path, { method = "GET", body, headers = {} } = {}) {
   if (!res.ok) {
     let msg = `HTTP ${res.status}`;
     try {
-      const j = await res.json();
-      msg = j?.message || msg;
-    } catch {}
+      const json = await res.json();
+      msg = json?.message || msg;
+    } catch (_) {}
     throw new Error(msg);
   }
 
@@ -39,7 +46,7 @@ async function request(path, { method = "GET", body, headers = {} } = {}) {
   return ct.includes("application/json") ? res.json() : res.text();
 }
 
-// API genérica
+// ---- API BASE ----
 export const api = {
   get: (p) => request(p),
   post: (p, body) => request(p, { method: "POST", body }),
@@ -47,23 +54,52 @@ export const api = {
   del: (p) => request(p, { method: "DELETE" }),
 };
 
-// ==== EXPORTS QUE USAN TUS PÁGINAS ====
-
-// Login (para Login.jsx)
+// ==========================================
+//            AUTENTICACIÓN
+// ==========================================
 export function login({ email, password }) {
   return api.post(R.AUTH_LOGIN, { email, password });
 }
 
-// DUCA
+// ==========================================
+//            MÓDULO DUCA
+// ==========================================
+
+// Obtener lista de estados
 export const getEstados = () => api.get(R.DUCA_ESTADOS);
+
+// Obtener lista de pendientes
 export const getPendientes = () => api.get(R.DUCA_VALIDACION);
+
+// Crear un nuevo DUCA
 export const crearDuca = (payload) => api.post(R.DUCA_REGISTRAR, payload);
 
-// Aliases para mantener compatibilidad con nombres usados en tus páginas
-export const registrarDUCA = crearDuca;            // ← un solo alias (no dupliques)
-export const obtenerPendientes = getPendientes;    // ← alias
-export const obtenerEstados = getEstados;          // ← alias
-
-// Usuarios (por si Users.jsx existe)
+// ==========================================
+//            MÓDULO USUARIOS
+// ==========================================
 export const getUsuarios = () => api.get(R.USUARIOS);
-export const crearUsuario = (u) => api.post(R.USUARIOS, u);
+export const crearUsuario = (usuario) => api.post(R.USUARIOS, usuario);
+
+// ==========================================
+//        ALIASES DE COMPATIBILIDAD
+//  (para evitar errores de imports en React)
+// ==========================================
+
+// Login.jsx usa esto:
+export { login as iniciarSesion };
+
+// DucaRegister.jsx usa esto:
+export const registrarDUCA = crearDuca;
+
+// Validation.jsx usa esto:
+export const obtenerPendientes = getPendientes;
+
+// States.jsx usa esto:
+export const obtenerEstados = getEstados;
+export const estados = getEstados;
+export const detalleEstado = (id) =>
+  api.get(`/api/duca/estados/${encodeURIComponent(id)}`);
+
+// ==========================================
+//           FIN DEL MÓDULO API FRONTEND
+// ==========================================
