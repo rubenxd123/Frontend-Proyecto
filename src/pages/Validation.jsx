@@ -2,6 +2,7 @@
 import React from "react";
 import { getJSON, postJSON } from "../api";
 import ActionDialog from "../components/ActionDialog";
+import DetailModal from "../components/DetailModal";
 
 function Badge({ value }) {
   const v = String(value || "").toUpperCase();
@@ -13,7 +14,11 @@ function Badge({ value }) {
     VALIDADA: "bg-green-500/20 text-green-300 ring-1 ring-green-500/40",
     RECHAZADA: "bg-rose-500/20 text-rose-300 ring-1 ring-rose-500/40",
   };
-  return <span className={`${base} ${map[v] || "bg-zinc-500/20 text-zinc-300 ring-1 ring-zinc-500/40"}`}>{v || "-"}</span>;
+  return (
+    <span className={`${base} ${map[v] || "bg-zinc-500/20 text-zinc-300 ring-1 ring-zinc-500/40"}`}>
+      {v || "-"}
+    </span>
+  );
 }
 
 export default function Validacion() {
@@ -21,12 +26,17 @@ export default function Validacion() {
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
 
+  // ---- modal de aprobar/rechazar
   const [dlg, setDlg] = React.useState({
     open: false,
     numero: null,
     accion: null, // "aprobar" | "rechazar"
     loading: false,
   });
+
+  // ---- modal de detalle
+  const [detailOpen, setDetailOpen] = React.useState(false);
+  const [detailItem, setDetailItem] = React.useState(null); // {numero, estado, creado,...}
 
   async function load() {
     setLoading(true);
@@ -58,18 +68,19 @@ export default function Validacion() {
     setDlg((s) => ({ ...s, loading: true }));
     const { numero, accion } = dlg;
     try {
-      // Endpoints esperados en el backend:
-      // POST /validacion/:numero/aprobar { comentario }
-      // POST /validacion/:numero/rechazar { comentario }
       const url = `/validacion/${encodeURIComponent(numero)}/${accion}`;
       await postJSON(url, { comentario });
-
       closeDialog();
       await load();
     } catch (e) {
       closeDialog();
       alert(e.message || "Acción falló");
     }
+  }
+
+  function openDetail(item) {
+    setDetailItem(item);      // pasa numero/estado/creado como base
+    setDetailOpen(true);      // el modal pedirá el resto a /duca/:numero
   }
 
   return (
@@ -91,7 +102,7 @@ export default function Validacion() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={4} className="text-center py-8 text-zinc-400">
+                  <td colSpan={4} className="py-8 text-center text-zinc-400">
                     Cargando…
                   </td>
                 </tr>
@@ -99,7 +110,7 @@ export default function Validacion() {
 
               {!loading && err && (
                 <tr>
-                  <td colSpan={4} className="text-center py-8 text-rose-300">
+                  <td colSpan={4} className="py-8 text-center text-rose-300">
                     {err}
                   </td>
                 </tr>
@@ -107,7 +118,7 @@ export default function Validacion() {
 
               {!loading && !err && items.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="text-center py-8 text-zinc-400">
+                  <td colSpan={4} className="py-8 text-center text-zinc-400">
                     Sin registros pendientes.
                   </td>
                 </tr>
@@ -118,14 +129,23 @@ export default function Validacion() {
                 items.map((r) => (
                   <tr key={r.numero}>
                     <td>
-                      <a className="link" href="#" onClick={(e) => e.preventDefault()}>
+                      {/* Clic en número abre el modal de detalle */}
+                      <button
+                        className="link"
+                        onClick={() => openDetail(r)}
+                        title="Ver detalle"
+                      >
                         {r.numero}
-                      </a>
+                      </button>
                     </td>
                     <td>
                       <Badge value={r.estado} />
                     </td>
-                    <td>{new Date(r.creado).toLocaleDateString()}</td>
+                    <td>
+                      {/* el backend ya devuelve string YYYY-MM-DD;
+                          si viene vacío, muestra '-' */}
+                      {r.creado || r.created || r.createdAt || r.fecha_emision || "-"}
+                    </td>
                     <td className="space-x-2">
                       <button
                         className="btn btn-primary"
@@ -147,7 +167,7 @@ export default function Validacion() {
         </div>
       </div>
 
-      {/* Modal de acción con comentario obligatorio */}
+      {/* Modal aprobar/rechazar (comentario obligatorio) */}
       <ActionDialog
         open={dlg.open}
         onClose={closeDialog}
@@ -155,6 +175,13 @@ export default function Validacion() {
         accion={dlg.accion}
         loading={dlg.loading}
         onConfirm={handleConfirm}
+      />
+
+      {/* Modal de detalle: se auto-carga con baseItem.numero */}
+      <DetailModal
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        baseItem={detailItem}
       />
     </div>
   );
